@@ -1,0 +1,16 @@
+require 'embed_html'
+
+url = ARGV[0]
+file = ARGV[1]
+
+if url && file
+	log = Logger.new($stdout)
+	log.level = Logger::INFO
+
+	html = EmbedHtml::Embeder.new(url, log).process
+	File.open(file, 'w') {|f| f.write(html)}
+
+else
+	puts "usage: eurl <URL> <OUTPUT_FILE>"
+
+end

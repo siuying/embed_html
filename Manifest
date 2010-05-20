@@ -1,0 +1,6 @@
+Manifest
+README.markdown
+Rakefile
+bin/eurl
+lib/embed_html.rb
+lib/embed_html/embeder.rb
