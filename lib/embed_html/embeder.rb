@@ -3,6 +3,7 @@ require 'open-uri'
 require 'hpricot'
 require 'uri'
 require 'base64'
+require 'typhoeus'
 
 module EmbedHtml
   class Embeder
@@ -18,7 +19,7 @@ module EmbedHtml
     
     def process
       @logger.info "downloading url: #{@url}"
-      html = open(@url.to_s).read
+      html = Typhoeus::Request.get(@url.to_s).body
       doc = Hpricot(html)
       
       hydra = Typhoeus::Hydra.new(:max_concurrency => MAX_CONCURRENCY)
