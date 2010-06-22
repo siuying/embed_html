@@ -2,12 +2,13 @@ require 'embed_html'
 
 url = ARGV[0]
 file = ARGV[1]
+concurrency = ARGV[2].nil? ? 5 : ARGV[2].to_i
 
 if url && file
 	log = Logger.new($stdout)
 	log.level = Logger::INFO
 
-	html = EmbedHtml::Embeder.new(url, log).process
+	html = EmbedHtml::Embeder.new(url, log, concurrency).process
 	File.open(file, 'w') {|f| f.write(html)}
 
 else

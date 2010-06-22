@@ -11,10 +11,12 @@ module EmbedHtml
     
     attr_accessor :url
     attr_accessor :logger
+    attr_accessor :concurrency
     
-    def initialize(url, logger=Logger.new($stdout))
+    def initialize(url, logger=Logger.new($stdout), concurrency=MAX_CONCURRENCY)
       @logger = logger
       @url = url
+      @concurrency = concurrency
     end
     
     def process
@@ -22,20 +24,22 @@ module EmbedHtml
       html = Typhoeus::Request.get(@url.to_s).body
       doc = Hpricot(html)
       
-      hydra = Typhoeus::Hydra.new(:max_concurrency => MAX_CONCURRENCY)
+      hydra = Typhoeus::Hydra.new(:max_concurrency => @concurrency)
       doc.search("//img").each do |img|                
         begin
           hydra.queue create_fetch_file_request(img, 'src')
         rescue StandardError => e
-          @logger.error "failed download image: #{img['src']}"
+          @logger.error "failed download image: #{img['src']} #{e.inspect}"
         end
       end
 
       doc.search("//script").each do |script|                
         begin
-          hydra.queue create_fetch_file_request(script, 'src')
+          if script['src']
+            hydra.queue create_fetch_file_request(script, 'src')
+          end
         rescue StandardError => e
-          @logger.error "failed download script: #{script['src']}"
+          @logger.error "failed download script: #{script['src']} #{e.inspect}"
         end
       end
 
@@ -43,7 +47,7 @@ module EmbedHtml
         begin
           hydra.queue create_fetch_file_request(link, 'href')
         rescue StandardError => e
-          @logger.error "failed download linked resource: #{link['href']}"
+          @logger.error "failed download linked resource: #{link['href']} #{e.inspect}"
         end
       end
       
