@@ -2,7 +2,6 @@ Dependencies
 ============
 
  * Hpricot
- * Typhoeus
 
 Install
 =======
