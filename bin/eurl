@@ -8,10 +8,14 @@ if url && file
 	log = Logger.new($stdout)
 	log.level = Logger::INFO
 
-	html = EmbedHtml::Embeder.new(url, log, concurrency).process
+	if url =~ /^http/
+		html = EmbedHtml::Embeder.new(url, log, concurrency).process
+	else
+		html = EmbedHtml::Embeder.new(url, log, concurrency).process_local
+	end
 	File.open(file, 'w') {|f| f.write(html)}
 
 else
-	puts "usage: eurl <URL> <OUTPUT_FILE>"
+	puts "usage: eurl <URL-OR-LOCAL_FILE> <OUTPUT_FILE>"
 
 end

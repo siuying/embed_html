@@ -4,6 +4,7 @@ require 'hpricot'
 require 'uri'
 require 'base64'
 require 'typhoeus'
+require 'mime/types'
 
 module EmbedHtml
   class Embeder
@@ -57,6 +58,39 @@ module EmbedHtml
       doc.to_html      
     end
     
+    def process_local
+      @logger.info "downloading url: #{@url}"
+      html = open(@url).read
+      doc = Hpricot(html)
+
+      doc.search("//img").each do |img|                
+        begin
+          fetch_file(img, 'src')
+        rescue StandardError => e
+          @logger.error "failed download image: #{img['src']} #{e.inspect}"
+        end
+      end
+
+      doc.search("//script").each do |script|                
+        begin
+          fetch_file(script, 'src')
+        rescue StandardError => e
+          @logger.error "failed download script: #{script['src']} #{e.inspect}"
+        end
+      end
+
+      doc.search("//link").each do |link|
+        begin
+          fetch_file(link, 'href')
+        rescue StandardError => e
+          @logger.error "failed download linked resource: #{link['href']} #{e.inspect}"
+        end
+      end
+
+      @logger.info "done"            
+      doc.to_html      
+    end
+    
     private
     def create_fetch_file_request(element, field)
       file_url = URI.join(@url, element.attributes[field])
@@ -73,6 +107,21 @@ module EmbedHtml
       end
       return request
     end
-    
+
+    def fetch_file(element, field)
+      if element.attributes[field] =~ /^http/
+        file_url = element.attributes[field]
+      else
+        file_url = File.expand_path(element.attributes[field], File.dirname(@url))
+      end
+      @logger.debug " download file: #{file_url}"
+      
+      type = MIME::Types.type_for(file_url).first.to_s rescue "application/data"
+      data = open(file_url.to_s).read
+      if data && type
+        data_b64 = Base64.encode64(data)
+        element.attributes[field] = "data:#{type};base64,#{data_b64}"
+      end  
+    end
   end
 end
