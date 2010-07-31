@@ -14,15 +14,15 @@ module EmbedHtml
     attr_accessor :logger
     attr_accessor :concurrency
     
-    def initialize(url, logger=Logger.new($stdout), concurrency=MAX_CONCURRENCY)
+    def initialize(url_or_html, logger=Logger.new($stdout), concurrency=MAX_CONCURRENCY)
       @logger = logger
-      @url = url
+      @url_or_html = url_or_html
       @concurrency = concurrency
     end
     
     def process
-      @logger.info "downloading url: #{@url}"
-      html = Typhoeus::Request.get(@url.to_s).body
+      @logger.info "downloading url: #{@url_or_html}"
+      html = (@url_or_html =~ /$http/) ? Typhoeus::Request.get(@url_or_html.to_s).body : @url_or_html
       doc = Hpricot(html)
       
       hydra = Typhoeus::Hydra.new(:max_concurrency => @concurrency)
@@ -59,8 +59,8 @@ module EmbedHtml
     end
     
     def process_local
-      @logger.info "downloading url: #{@url}"
-      html = open(@url).read
+      @logger.info "downloading url: #{@url_or_html}"
+      html = open(@url_or_html).read
       doc = Hpricot(html)
 
       doc.search("//img").each do |img|                
@@ -93,7 +93,7 @@ module EmbedHtml
     
     private
     def create_fetch_file_request(element, field)
-      file_url = URI.join(@url, element.attributes[field])
+      file_url = (@url_or_html =~ /^http/) ? URI.join(@url_or_html, element.attributes[field]) : element.attributes[field]
       @logger.debug "queue download file: #{file_url}"
 
       request = Typhoeus::Request.new(file_url.to_s)
@@ -109,12 +109,8 @@ module EmbedHtml
     end
 
     def fetch_file(element, field)
-      if element.attributes[field] =~ /^http/
-        file_url = element.attributes[field]
-      else
-        file_url = File.expand_path(element.attributes[field], File.dirname(@url))
-      end
-      @logger.debug " download file: #{file_url}"
+      file_url = element.attributes[field]
+      @logger.debug "queue download file: #{file_url}"
       
       type = MIME::Types.type_for(file_url).first.to_s rescue "application/data"
       data = open(file_url.to_s).read
