@@ -10,9 +10,10 @@ module EmbedHtml
   class Embeder
     MAX_CONCURRENCY = 5
     
-    attr_accessor :url
+    attr_accessor :url_or_html
     attr_accessor :logger
     attr_accessor :concurrency
+    attr_accessor :base_dirname
     
     def initialize(url_or_html, logger=Logger.new($stdout), concurrency=MAX_CONCURRENCY)
       @logger = logger
@@ -21,14 +22,18 @@ module EmbedHtml
     end
     
     def process
-      @logger.info "downloading url: #{@url_or_html}"
+      # @logger.info "downloading url: #{@url_or_html}"
       html = (@url_or_html =~ /$http/) ? Typhoeus::Request.get(@url_or_html.to_s).body : @url_or_html
       doc = Hpricot(html)
       
       hydra = Typhoeus::Hydra.new(:max_concurrency => @concurrency)
       doc.search("//img").each do |img|                
         begin
-          hydra.queue create_fetch_file_request(img, 'src')
+          if img['src']=~ /^http/
+            hydra.queue create_fetch_file_request(img, 'src')
+          else
+            fetch_file(img, 'src')
+          end
         rescue StandardError => e
           @logger.error "failed download image: #{img['src']} #{e.inspect}"
         end
@@ -36,8 +41,10 @@ module EmbedHtml
 
       doc.search("//script").each do |script|                
         begin
-          if script['src']
+          if script['src'] and script['src'] =~ /^http/
             hydra.queue create_fetch_file_request(script, 'src')
+          elsif script['src']
+            fetch_file(script, 'src')
           end
         rescue StandardError => e
           @logger.error "failed download script: #{script['src']} #{e.inspect}"
@@ -46,7 +53,12 @@ module EmbedHtml
 
       doc.search("//link").each do |link|
         begin
-          hydra.queue create_fetch_file_request(link, 'href')
+          url = link['href']
+          if url =~ /^http/
+            hydra.queue create_fetch_file_request(link, 'href')
+          else
+            fetch_file(link, 'href')
+          end
         rescue StandardError => e
           @logger.error "failed download linked resource: #{link['href']} #{e.inspect}"
         end
@@ -54,12 +66,12 @@ module EmbedHtml
       
       hydra.run
 
-      @logger.info "done"            
+      # @logger.info "done"            
       doc.to_html      
     end
     
     def process_local
-      @logger.info "downloading url: #{@url_or_html}"
+      # @logger.info "downloading url: #{@url_or_html}"
       html = open(@url_or_html).read
       doc = Hpricot(html)
 
@@ -87,7 +99,7 @@ module EmbedHtml
         end
       end
 
-      @logger.info "done"            
+      # @logger.info "done"            
       doc.to_html      
     end
     
@@ -109,8 +121,9 @@ module EmbedHtml
     end
 
     def fetch_file(element, field)
-      file_url = element.attributes[field]
+      file_url = @base_dirname ? "#{@base_dirname.to_s}/#{element.attributes[field]}" : element.attributes[field]
       @logger.debug "queue download file: #{file_url}"
+      return unless File.exists?(file_url)
       
       type = MIME::Types.type_for(file_url).first.to_s rescue "application/data"
       data = open(file_url.to_s).read
